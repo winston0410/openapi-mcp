@@ -13,6 +13,8 @@ from fastapi.openapi.docs import (
     get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.responses import Response
+from fastmcp import FastMCP
+from fastmcp.server.providers.openapi import RouteMap, MCPType
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -36,7 +38,7 @@ metrics.set_meter_provider(
 )
 trace.set_tracer_provider(TracerProvider(resource=_otel_resource))
 
-app = FastAPI(
+api_app = FastAPI(
     title="Trade API",
     description="A FastAPI service exposing market data via yfinance.",
     version=SERVICE_VERSION_VALUE,
@@ -46,33 +48,35 @@ app = FastAPI(
     swagger_ui_oauth2_redirect_url=OAUTH2_REDIRECT_URL,
 )
 
-FastAPIInstrumentor.instrument_app(app)
 
-
-@app.get("/metrics", include_in_schema=False)
+@api_app.get("/metrics", include_in_schema=False)
 def prometheus_metrics() -> Response:
+    """Expose OpenTelemetry metrics in Prometheus text format for scraping."""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.get("/docs", include_in_schema=False)
+@api_app.get("/docs", include_in_schema=False)
 async def swagger_ui_html():
+    """Serve the Swagger UI documentation page for this API."""
     return get_swagger_ui_html(
         openapi_url=OPENAPI_URL,
-        title=f"{app.title} - Swagger UI",
+        title=f"{api_app.title} - Swagger UI",
         oauth2_redirect_url=OAUTH2_REDIRECT_URL,
     )
 
 
-@app.get(OAUTH2_REDIRECT_URL, include_in_schema=False)
+@api_app.get(OAUTH2_REDIRECT_URL, include_in_schema=False)
 async def swagger_ui_redirect():
+    """OAuth2 redirect helper used by the Swagger UI's interactive auth flow."""
     return get_swagger_ui_oauth2_redirect_html()
 
 
-@app.get("/redoc", include_in_schema=False)
+@api_app.get("/redoc", include_in_schema=False)
 async def redoc_html():
+    """Serve the ReDoc documentation page for this API."""
     return get_redoc_html(
         openapi_url=OPENAPI_URL,
-        title=f"{app.title} - ReDoc",
+        title=f"{api_app.title} - ReDoc",
     )
 
 
@@ -106,13 +110,37 @@ class HistoryResponse(BaseModel):
     points: list[HistoryPoint]
 
 
-@app.get("/health", response_model=HealthResponse, tags=["system"])
+@api_app.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["system"],
+    operation_id="get_health",
+)
 def health() -> HealthResponse:
+    """Liveness probe.
+
+    Returns a constant `"ok"` status alongside the current server time in UTC,
+    so callers can confirm the API process is reachable and clocks are sane.
+    """
     return HealthResponse(status="ok", timestamp=datetime.now(UTC))
 
 
-@app.get("/quote/{symbol}", response_model=Quote, tags=["market"])
+@api_app.get(
+    "/quote/{symbol}",
+    response_model=Quote,
+    tags=["market"],
+    operation_id="get_quote",
+)
 def get_quote(symbol: str) -> Quote:
+    """Get the latest market quote for a stock ticker symbol.
+
+    Looks up `symbol` on Yahoo Finance and returns the most recent traded price,
+    the listing currency, the current market state (e.g. `REGULAR`, `CLOSED`,
+    `PRE`, `POST`), and the company's short name. Use this when you need a
+    point-in-time price snapshot rather than a time series.
+
+    Raises `404` if no quote data is available for the symbol.
+    """
     ticker = yf.Ticker(symbol)
     info = ticker.fast_info
     price = getattr(info, "last_price", None)
@@ -135,7 +163,12 @@ def get_quote(symbol: str) -> Quote:
     )
 
 
-@app.get("/history/{symbol}", response_model=HistoryResponse, tags=["market"])
+@api_app.get(
+    "/history/{symbol}",
+    response_model=HistoryResponse,
+    tags=["market"],
+    operation_id="get_price_history",
+)
 def get_history(
     symbol: str,
     period: Annotated[
@@ -145,6 +178,16 @@ def get_history(
         str, Query(description="yfinance interval, e.g. 1m, 5m, 1h, 1d")
     ] = "1d",
 ) -> HistoryResponse:
+    """Get historical OHLCV candles for a stock ticker symbol.
+
+    Returns a time-ordered series of open / high / low / close / volume points
+    for `symbol` from Yahoo Finance. `period` controls the lookback window
+    (e.g. `1d`, `5d`, `1mo`, `1y`, `max`) and `interval` controls the candle
+    granularity (e.g. `1m`, `5m`, `1h`, `1d`). Use this for charting, backtests,
+    or trend analysis rather than a single live price.
+
+    Raises `404` if no history is available for the symbol.
+    """
     ticker = yf.Ticker(symbol)
     df = ticker.history(period=period, interval=interval)
     if df.empty:
@@ -167,6 +210,31 @@ def get_history(
     )
 
 
+mcp = FastMCP.from_fastapi(
+    app=api_app,
+    name="Trade API MCP",
+    route_maps=[
+        # Exclude one exact route from MCP tool generation
+        RouteMap(
+            methods=["GET"],
+            pattern=r"^/health$",
+            mcp_type=MCPType.EXCLUDE,
+        ),
+    ],
+)
+mcp_app = mcp.http_app(path="/mcp")
+
+app = FastAPI(
+    title="Trade API with MCP",
+    description="A FastAPI service exposing market data via yfinance, with an MCP interface for LLMs.",
+    version=SERVICE_VERSION_VALUE,
+    routes=[*mcp_app.routes, *api_app.routes],
+    lifespan=mcp_app.lifespan,
+)
+
+FastAPIInstrumentor.instrument_app(app)
+
+
 def main() -> None:
     import argparse
 
@@ -184,6 +252,8 @@ def main() -> None:
     log.info("Swagger UI: http://%s:%d/docs", args.host, args.port)
     log.info("ReDoc:      http://%s:%d/redoc", args.host, args.port)
     log.info("OpenAPI:    http://%s:%d/openapi.json", args.host, args.port)
+    log.info("MCP:        http://%s:%d/mcp", args.host, args.port)
+    log.info("Metrics:    http://%s:%d/metrics", args.host, args.port)
 
     uvicorn.run("main:app", host=args.host, port=args.port, reload=args.reload)
 
