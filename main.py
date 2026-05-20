@@ -12,20 +12,46 @@ from fastapi.openapi.docs import (
     get_swagger_ui_html,
     get_swagger_ui_oauth2_redirect_html,
 )
+from fastapi.responses import Response
+from opentelemetry import metrics, trace
+from opentelemetry.exporter.prometheus import PrometheusMetricReader
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 OPENAPI_URL = "/openapi.json"
 OAUTH2_REDIRECT_URL = "/docs/oauth2-redirect"
 
+SERVICE_NAME_VALUE = "trade-api"
+SERVICE_VERSION_VALUE = "0.1.0"
+
+_otel_resource = Resource.create(
+    {SERVICE_NAME: SERVICE_NAME_VALUE, SERVICE_VERSION: SERVICE_VERSION_VALUE}
+)
+metrics.set_meter_provider(
+    MeterProvider(metric_readers=[PrometheusMetricReader()], resource=_otel_resource)
+)
+trace.set_tracer_provider(TracerProvider(resource=_otel_resource))
+
 app = FastAPI(
     title="Trade API",
     description="A FastAPI service exposing market data via yfinance.",
-    version="0.1.0",
+    version=SERVICE_VERSION_VALUE,
     openapi_url=OPENAPI_URL,
     docs_url=None,
     redoc_url=None,
     swagger_ui_oauth2_redirect_url=OAUTH2_REDIRECT_URL,
 )
+
+FastAPIInstrumentor.instrument_app(app)
+
+
+@app.get("/metrics", include_in_schema=False)
+def prometheus_metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/docs", include_in_schema=False)
@@ -91,7 +117,9 @@ def get_quote(symbol: str) -> Quote:
     info = ticker.fast_info
     price = getattr(info, "last_price", None)
     if price is None:
-        raise HTTPException(status_code=404, detail=f"No quote available for {symbol!r}")
+        raise HTTPException(
+            status_code=404, detail=f"No quote available for {symbol!r}"
+        )
     full_info: dict[str, Any] = {}
     try:
         full_info = ticker.info or {}
@@ -110,8 +138,12 @@ def get_quote(symbol: str) -> Quote:
 @app.get("/history/{symbol}", response_model=HistoryResponse, tags=["market"])
 def get_history(
     symbol: str,
-    period: Annotated[str, Query(description="yfinance period, e.g. 1d, 5d, 1mo, 1y, max")] = "1mo",
-    interval: Annotated[str, Query(description="yfinance interval, e.g. 1m, 5m, 1h, 1d")] = "1d",
+    period: Annotated[
+        str, Query(description="yfinance period, e.g. 1d, 5d, 1mo, 1y, max")
+    ] = "1mo",
+    interval: Annotated[
+        str, Query(description="yfinance interval, e.g. 1m, 5m, 1h, 1d")
+    ] = "1d",
 ) -> HistoryResponse:
     ticker = yf.Ticker(symbol)
     df = ticker.history(period=period, interval=interval)
@@ -130,7 +162,9 @@ def get_history(
                 volume=int(r["Volume"]),
             )
         )
-    return HistoryResponse(symbol=symbol.upper(), period=period, interval=interval, points=points)
+    return HistoryResponse(
+        symbol=symbol.upper(), period=period, interval=interval, points=points
+    )
 
 
 def main() -> None:
@@ -142,7 +176,9 @@ def main() -> None:
     parser.add_argument("--reload", action="store_true")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     log = logging.getLogger("trade-api")
     log.info("Starting Trade API on http://%s:%d", args.host, args.port)
     log.info("Swagger UI: http://%s:%d/docs", args.host, args.port)
