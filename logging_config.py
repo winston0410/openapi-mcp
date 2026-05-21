@@ -1,4 +1,3 @@
-# logging_config.py
 from __future__ import annotations
 
 import contextvars
@@ -84,7 +83,7 @@ def configure_logging(
     service_name: str = "my-app",
     environment: str = "local",
     level: str = "INFO",
-    disable_uvicorn_access_log: bool = True,
+    disable_hypercorn_access_log: bool = True,
 ) -> None:
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(
@@ -99,9 +98,9 @@ def configure_logging(
     root_logger.addHandler(handler)
     root_logger.setLevel(level.upper())
 
-    if disable_uvicorn_access_log:
-        logging.getLogger("uvicorn.access").disabled = True
+    if disable_hypercorn_access_log:
+        logging.getLogger("hypercorn.access").disabled = True
 
-    logging.getLogger("uvicorn.error").handlers.clear()
-    logging.getLogger("uvicorn.error").propagate = True
+    logging.getLogger("hypercorn.error").handlers.clear()
+    logging.getLogger("hypercorn.error").propagate = True
 
