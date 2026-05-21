@@ -466,6 +466,12 @@ mcp = FastMCP.from_fastapi(
         ),
     ],
 )
+
+@mcp.prompt
+def ask_about_topic(topic: str) -> str:
+    """Generates a user message asking for an explanation of a topic."""
+    return f"Can you please explain the concept of '{topic}'?"
+
 mcp.add_middleware(RateLimitingMiddleware())
 mcp.add_middleware(ResponseCachingMiddleware(cache_storage=MemoryStore()))
 mcp_app = mcp.http_app(path="/mcp", stateless_http=True)
