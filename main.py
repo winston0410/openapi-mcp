@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import tempfile
+from config import server_settings
 import logging
 import math
 from datetime import UTC, date, datetime
 from enum import Enum
 from typing import Annotated, Any, cast
 
-import uvicorn
 import yfinance as yf
 from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.openapi.docs import (
@@ -17,7 +16,6 @@ from fastapi.openapi.docs import (
     get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.responses import Response
-import pathlib
 from key_value.aio.stores.memory import MemoryStore
 from fastmcp import FastMCP
 from fastmcp.server.middleware.caching import ResponseCachingMiddleware
@@ -32,20 +30,6 @@ from opentelemetry.sdk.trace import TracerProvider
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import AfterValidator, BaseModel, Field
 from yfinance.const import SECTOR_INDUSTY_MAPPING_LC
-
-yfinance_cache_dir = pathlib.Path(tempfile.gettempdir()) / "yfinance"
-
-class ServerSettings(BaseSettings):
-    REDIS_URL: str = Field(default="localhost:6379", description="URL for Redis connection")
-    YFINANCE_CACHE_DIR: str = Field(default=str(yfinance_cache_dir), description="Directory for caching for yfinance")
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True
-    )
-
-server_settings = ServerSettings()
 
 yf.set_tz_cache_location(server_settings.YFINANCE_CACHE_DIR)
 
@@ -73,6 +57,9 @@ api_app = FastAPI(
     docs_url=DOCS_URL,
     redoc_url=REDOC_URL,
     swagger_ui_oauth2_redirect_url=OAUTH2_REDIRECT_URL,
+    terms_of_service=None,
+    contact=None,
+    license_info=None
 )
 
 
@@ -80,11 +67,6 @@ api_app = FastAPI(
 def prometheus_metrics() -> Response:
     """Expose OpenTelemetry metrics in Prometheus text format for scraping."""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
-@api_app.get(OAUTH2_REDIRECT_URL, include_in_schema=False)
-async def swagger_ui_redirect():
-    """OAuth2 redirect helper used by the Swagger UI's interactive auth flow."""
-    return get_swagger_ui_oauth2_redirect_html()
 
 class HealthResponse(BaseModel):
     status: str = Field(..., examples=["ok"])
