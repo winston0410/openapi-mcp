@@ -30,6 +30,8 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import AfterValidator, BaseModel, Field
 from yfinance.const import SECTOR_INDUSTY_MAPPING_LC
 
+DOCS_URL = "/docs"
+REDOC_URL = "/redoc"
 OPENAPI_URL = "/openapi.json"
 OAUTH2_REDIRECT_URL = "/docs/oauth2-redirect"
 
@@ -49,8 +51,8 @@ api_app = FastAPI(
     description="A FastAPI service exposing market data via yfinance.",
     version=SERVICE_VERSION_VALUE,
     openapi_url=OPENAPI_URL,
-    docs_url=None,
-    redoc_url=None,
+    docs_url=DOCS_URL,
+    redoc_url=REDOC_URL,
     swagger_ui_oauth2_redirect_url=OAUTH2_REDIRECT_URL,
 )
 
@@ -60,31 +62,10 @@ def prometheus_metrics() -> Response:
     """Expose OpenTelemetry metrics in Prometheus text format for scraping."""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-
-@api_app.get("/docs", include_in_schema=False)
-async def swagger_ui_html():
-    """Serve the Swagger UI documentation page for this API."""
-    return get_swagger_ui_html(
-        openapi_url=OPENAPI_URL,
-        title=f"{api_app.title} - Swagger UI",
-        oauth2_redirect_url=OAUTH2_REDIRECT_URL,
-    )
-
-
 @api_app.get(OAUTH2_REDIRECT_URL, include_in_schema=False)
 async def swagger_ui_redirect():
     """OAuth2 redirect helper used by the Swagger UI's interactive auth flow."""
     return get_swagger_ui_oauth2_redirect_html()
-
-
-@api_app.get("/redoc", include_in_schema=False)
-async def redoc_html():
-    """Serve the ReDoc documentation page for this API."""
-    return get_redoc_html(
-        openapi_url=OPENAPI_URL,
-        title=f"{api_app.title} - ReDoc",
-    )
-
 
 class HealthResponse(BaseModel):
     status: str = Field(..., examples=["ok"])

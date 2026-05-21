@@ -1,3 +1,3 @@
 ```sh
-hypercorn main:app --bind 0.0.0.0:8080
+uv run hypercorn main:app --bind 0.0.0.0:8080
 ```
