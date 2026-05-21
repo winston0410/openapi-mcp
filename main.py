@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+import tempfile
 import logging
 import math
 from datetime import UTC, date, datetime
@@ -15,6 +17,7 @@ from fastapi.openapi.docs import (
     get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.responses import Response
+import pathlib
 from key_value.aio.stores.memory import MemoryStore
 from fastmcp import FastMCP
 from fastmcp.server.middleware.caching import ResponseCachingMiddleware
@@ -29,6 +32,22 @@ from opentelemetry.sdk.trace import TracerProvider
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import AfterValidator, BaseModel, Field
 from yfinance.const import SECTOR_INDUSTY_MAPPING_LC
+
+yfinance_cache_dir = pathlib.Path(tempfile.gettempdir()) / "yfinance"
+
+class ServerSettings(BaseSettings):
+    REDIS_URL: str = Field(default="localhost:6379", description="URL for Redis connection")
+    YFINANCE_CACHE_DIR: str = Field(default=str(yfinance_cache_dir), description="Directory for caching for yfinance")
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True
+    )
+
+server_settings = ServerSettings()
+
+yf.set_tz_cache_location(server_settings.YFINANCE_CACHE_DIR)
 
 DOCS_URL = "/docs"
 REDOC_URL = "/redoc"
