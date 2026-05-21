@@ -30,6 +30,10 @@ from opentelemetry.sdk.trace import TracerProvider
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import AfterValidator, BaseModel, Field
 from yfinance.const import SECTOR_INDUSTY_MAPPING_LC
+from middleware.fastmcp_logging import FastMCPStructuredLoggingMiddleware
+from middleware.fastapi_logging import FastAPIRequestLoggingMiddleware
+from logging_config import configure_logging
+
 
 yf.set_tz_cache_location(server_settings.YFINANCE_CACHE_DIR)
 
@@ -40,6 +44,12 @@ OAUTH2_REDIRECT_URL = "/docs/oauth2-redirect"
 
 SERVICE_NAME_VALUE = "trade-api"
 SERVICE_VERSION_VALUE = "0.1.0"
+
+configure_logging(
+    service_name=SERVICE_NAME,
+    environment="local",
+    level="INFO"
+)
 
 _otel_resource = Resource.create(
     {SERVICE_NAME: SERVICE_NAME_VALUE, SERVICE_VERSION: SERVICE_VERSION_VALUE}
@@ -474,6 +484,9 @@ def ask_about_topic(topic: str) -> str:
 
 mcp.add_middleware(RateLimitingMiddleware())
 mcp.add_middleware(ResponseCachingMiddleware(cache_storage=MemoryStore()))
+mcp.add_middleware(FastMCPStructuredLoggingMiddleware(
+        include_arguments=True
+    ))
 mcp_app = mcp.http_app(path="/mcp", stateless_http=True)
 
 app = FastAPI(
@@ -482,6 +495,10 @@ app = FastAPI(
     version=SERVICE_VERSION_VALUE,
     routes=[*mcp_app.routes, *api_app.routes],
     lifespan=mcp_app.lifespan,
+)
+app.add_middleware(
+    FastAPIRequestLoggingMiddleware,
+    exclude_path_prefixes=("/mcp",),
 )
 
 FastAPIInstrumentor.instrument_app(app)
