@@ -12,4 +12,4 @@ COPY ./ ./
 RUN groupadd -r appuser && useradd -m -r -g appuser appuser && chown -R appuser:appuser /app
 USER appuser
 
-ENTRYPOINT ["/app/.venv/bin/python", "-m", "main"]
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "hypercorn", "main:app", "--bind", "0.0.0.0:8080"]

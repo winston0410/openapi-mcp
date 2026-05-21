@@ -15,7 +15,10 @@ from fastapi.openapi.docs import (
     get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.responses import Response
+from key_value.aio.stores.memory import MemoryStore
 from fastmcp import FastMCP
+from fastmcp.server.middleware.caching import ResponseCachingMiddleware
+from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 from fastmcp.server.providers.openapi import RouteMap, MCPType
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
@@ -481,7 +484,9 @@ mcp = FastMCP.from_fastapi(
         ),
     ],
 )
-mcp_app = mcp.http_app(path="/mcp")
+mcp.add_middleware(RateLimitingMiddleware())
+mcp.add_middleware(ResponseCachingMiddleware(cache_storage=MemoryStore()))
+mcp_app = mcp.http_app(path="/mcp", stateless_http=True)
 
 app = FastAPI(
     title="Trade API with MCP",
@@ -492,30 +497,3 @@ app = FastAPI(
 )
 
 FastAPIInstrumentor.instrument_app(app)
-
-
-def main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Trade API")
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--reload", action="store_true")
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
-    log = logging.getLogger("trade-api")
-    log.info("Starting Trade API on http://%s:%d", args.host, args.port)
-    log.info("Swagger UI: http://%s:%d/docs", args.host, args.port)
-    log.info("ReDoc:      http://%s:%d/redoc", args.host, args.port)
-    log.info("OpenAPI:    http://%s:%d/openapi.json", args.host, args.port)
-    log.info("MCP:        http://%s:%d/mcp", args.host, args.port)
-    log.info("Metrics:    http://%s:%d/metrics", args.host, args.port)
-
-    uvicorn.run("main:app", host=args.host, port=args.port, reload=args.reload)
-
-
-if __name__ == "__main__":
-    main()
