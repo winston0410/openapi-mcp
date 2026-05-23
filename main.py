@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from key_value.aio.stores.redis import RedisStore
+from redis.connection import ConnectionPool
+from redis import Redis
+from pyrate_limiter import RedisBucket, Rate, Duration
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from config import server_settings
 import logging
@@ -33,6 +37,8 @@ from yfinance.const import SECTOR_INDUSTY_MAPPING_LC
 from middleware.fastmcp_logging import FastMCPStructuredLoggingMiddleware
 from middleware.fastapi_logging import FastAPIRequestLoggingMiddleware
 from logging_config import configure_logging
+from pyrate_limiter import Duration, Limiter, Rate
+from custom_api_limiter.middleware import RateLimiterMiddleware
 
 yf.set_tz_cache_location(server_settings.YFINANCE_CACHE_DIR)
 
@@ -69,6 +75,17 @@ api_app = FastAPI(
     terms_of_service=None,
     contact=None,
     license_info=None
+)
+
+rates = [Rate(10, Duration.SECOND)]
+pool = ConnectionPool().from_url(url=server_settings.API_RATELIMITING_REDIS_URL)
+redis_db = Redis(connection_pool=pool)
+bucket_key = "fastapi_limiter"
+bucket = RedisBucket.init(rates, redis_db, bucket_key)
+
+api_app.add_middleware(
+    RateLimiterMiddleware,
+    limiter=Limiter(Rate(10, Duration.SECOND)),
 )
 
 
@@ -481,7 +498,7 @@ def ask_about_topic(topic: str) -> str:
     return f"Can you please explain the concept of '{topic}'?"
 
 mcp.add_middleware(RateLimitingMiddleware())
-mcp.add_middleware(ResponseCachingMiddleware(cache_storage=MemoryStore()))
+mcp.add_middleware(ResponseCachingMiddleware(cache_storage=RedisStore(url=server_settings.MCP_RESPONSE_CACHE_REDIS_URL)))
 mcp.add_middleware(FastMCPStructuredLoggingMiddleware(
         include_arguments=True
     ))

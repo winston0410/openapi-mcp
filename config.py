@@ -6,8 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 yfinance_cache_dir = pathlib.Path(tempfile.gettempdir()) / "yfinance"
 
 class ServerSettings(BaseSettings):
-    MCP_RESPONSE_CACHE_REDIS_URL: str = Field(default="localhost:6379", description="URL for Redis connection for caching responses of MCP")
-    API_RATELIMITING_REDIS_URL: str = Field(default="localhost:6379", description="URL for Redis connection for rate limiting API requests")
+    MCP_RESPONSE_CACHE_REDIS_URL: str = Field(default="redis://localhost:6379", description="URL for Redis connection for caching responses of MCP")
+    API_RATELIMITING_REDIS_URL: str = Field(default="redis://localhost:6379", description="URL for Redis connection for rate limiting API requests")
     YFINANCE_CACHE_DIR: str = Field(default=str(yfinance_cache_dir), description="Directory for caching market data")
 
     model_config = SettingsConfigDict(

@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "fastapi-limiter>=0.2.0",
     "fastapi[standard]>=0.136.1",
     "fastmcp>=3.3.1",
     "hypercorn>=0.18.0",
@@ -14,5 +15,6 @@ dependencies = [
     "opentelemetry-sdk>=1.30.0",
     "prometheus-client>=0.20.0",
     "pydantic-settings>=2.14.1",
+    "redis>=7.4.0",
     "yfinance>=1.3.0",
 ]
