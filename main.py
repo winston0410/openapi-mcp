@@ -212,7 +212,6 @@ def _validate_industry_key(value: str) -> str:
         )
     return value
 
-
 IndustryKey = Annotated[str, AfterValidator(_validate_industry_key)]
 
 
@@ -273,22 +272,6 @@ def _df_to_records(df: Any) -> list[dict[str, Any]]:
             elif hasattr(v, "isoformat"):
                 row[k] = v.isoformat()
     return out
-
-
-@api_app.get(
-    "/health",
-    response_model=HealthResponse,
-    tags=["system"],
-    operation_id="get_health",
-)
-def health() -> HealthResponse:
-    """Readiness probe.
-
-    Returns a constant `"ok"` status alongside the current server time in UTC,
-    so callers can confirm the API process is reachable and clocks are sane.
-    """
-    return HealthResponse(status="ok", timestamp=datetime.now(UTC))
-
 
 @api_app.get(
     "/ticker/{symbol}",
@@ -516,5 +499,18 @@ app.add_middleware(
     FastAPIRequestLoggingMiddleware,
     exclude_path_prefixes=("/mcp",),
 )
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["system"],
+    operation_id="get_health",
+)
+def health() -> HealthResponse:
+    """Readiness probe.
+
+    Returns a constant `"ok"` status alongside the current server time in UTC,
+    so callers can confirm the API process is reachable and clocks are sane.
+    """
+    return HealthResponse(status="ok", timestamp=datetime.now(UTC))
 
 FastAPIInstrumentor.instrument_app(app)
