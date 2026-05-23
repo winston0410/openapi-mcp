@@ -3,7 +3,7 @@ from __future__ import annotations
 from key_value.aio.stores.redis import RedisStore
 from redis.connection import ConnectionPool
 from redis import Redis
-from pyrate_limiter import RedisBucket, Rate, Duration
+from pyrate_limiter import RedisBucket, Rate, Duration, Limiter
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from config import server_settings
 import logging
@@ -82,10 +82,11 @@ pool = ConnectionPool().from_url(url=server_settings.API_RATELIMITING_REDIS_URL)
 redis_db = Redis(connection_pool=pool)
 bucket_key = "fastapi_limiter"
 bucket = RedisBucket.init(rates, redis_db, bucket_key)
+limiter = Limiter(bucket)
 
 api_app.add_middleware(
     RateLimiterMiddleware,
-    limiter=Limiter(Rate(10, Duration.SECOND)),
+    limiter=limiter
 )
 
 
