@@ -218,11 +218,15 @@ IndustryKey = Annotated[str, AfterValidator(_validate_industry_key)]
 
 
 class TickerResponse(BaseModel):
-    symbol: str
-    period: str
-    interval: str
-    info: dict[str, Any] = Field(default_factory=dict)
-    history: list[HistoryPoint] = Field(default_factory=list)
+    # symbol: str
+    # period: str
+    # interval: str
+    # info: dict[str, Any] = Field(default_factory=dict)
+    # history: list[HistoryPoint] = Field(default_factory=list)
+    actions: list[TickerAction] = Field(default_factory=list)
+    analyst_price_targets: AnalystPriceTargets | None = None
+    balance_sheet: list[dict[str, Any]] = Field(default_factory=list)
+
 
 
 class MarketResponse(BaseModel):
@@ -249,7 +253,6 @@ class SectorResponse(BaseModel):
     top_etfs: dict[str, str] = Field(default_factory=dict)
     top_mutual_funds: dict[str, str] = Field(default_factory=dict)
 
-
 class IndustryResponse(BaseModel):
     key: str
     name: str | None = None
@@ -260,6 +263,20 @@ class IndustryResponse(BaseModel):
     top_companies: list[dict[str, Any]] = Field(default_factory=list)
     top_performing_companies: list[dict[str, Any]] = Field(default_factory=list)
     top_growth_companies: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TickerAction(BaseModel):
+    date: datetime = Field(..., alias="Date")
+    dividends: float = Field(..., alias="Dividends")
+    stock_splits: float = Field(..., alias="Stock Splits")
+
+
+class AnalystPriceTargets(BaseModel):
+    current: float | None = None
+    high: float | None = None
+    low: float | None = None
+    mean: float | None = None
+    median: float | None = None
 
 
 def _df_to_records(df: Any) -> list[dict[str, Any]]:
@@ -301,37 +318,38 @@ def get_ticker(
     try:
         t = yf.Ticker(symbol)
         logger.info("check logger", extra={
-            "actions": t.actions,
-            "analyst_price_targets": t.analyst_price_targets
+            # "balance_sheet": t.balance_sheet,
+            "calendar": t.calendar
         })
-        info = dict(t.info or {})
-        hist = t.history(period=period.value, interval=interval.value)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
-    if hist is None or hist.empty:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No history for symbol '{symbol}' at period={period.value} interval={interval.value}",
-        )
-
-    points = [
-        HistoryPoint(
-            date=idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else cast(datetime, idx),
-            open=float(row["Open"]),
-            high=float(row["High"]),
-            low=float(row["Low"]),
-            close=float(row["Close"]),
-            volume=int(row["Volume"]),
-        )
-        for idx, row in hist.iterrows()
-    ]
+    # if hist is None or hist.empty:
+    #     raise HTTPException(
+    #         status_code=404,
+    #         detail=f"No history for symbol '{symbol}' at period={period.value} interval={interval.value}",
+    #     )
+    #
+    # points = [
+    #     HistoryPoint(
+    #         date=idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else cast(datetime, idx),
+    #         open=float(row["Open"]),
+    #         high=float(row["High"]),
+    #         low=float(row["Low"]),
+    #         close=float(row["Close"]),
+    #         volume=int(row["Volume"]),
+    #     )
+    #     for idx, row in hist.iterrows()
+    # ]
     return TickerResponse(
-        symbol=symbol.upper(),
-        period=period.value,
-        interval=interval.value,
-        info=info,
-        history=points,
+        # symbol=symbol.upper(),
+        # period=period.value,
+        # interval=interval.value,
+        # info=info,
+        # history=points,
+        actions=_df_to_records(t.actions),
+        analyst_price_targets=AnalystPriceTargets(**t.analyst_price_targets) if t.analyst_price_targets else None,
+        # balance_sheet=_df_to_records(t.balance_sheet),
     )
 
 
