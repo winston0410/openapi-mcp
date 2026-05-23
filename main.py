@@ -34,7 +34,6 @@ from middleware.fastmcp_logging import FastMCPStructuredLoggingMiddleware
 from middleware.fastapi_logging import FastAPIRequestLoggingMiddleware
 from logging_config import configure_logging
 
-
 yf.set_tz_cache_location(server_settings.YFINANCE_CACHE_DIR)
 
 DOCS_URL = "/docs"
@@ -61,7 +60,7 @@ trace.set_tracer_provider(TracerProvider(resource=_otel_resource))
 
 api_app = FastAPI(
     title="Trade API",
-    description="A FastAPI service exposing market data via yfinance.",
+    description="A FastAPI service exposing market data.",
     version=SERVICE_VERSION_VALUE,
     openapi_url=OPENAPI_URL,
     docs_url=DOCS_URL,
@@ -109,7 +108,7 @@ class HistoryResponse(BaseModel):
 
 
 class PeriodEnum(str, Enum):
-    """Valid `period` values accepted by yfinance `Ticker.history`."""
+    """Valid `period` values for history lookup."""
 
     d1 = "1d"
     d5 = "5d"
@@ -125,7 +124,7 @@ class PeriodEnum(str, Enum):
 
 
 class IntervalEnum(str, Enum):
-    """Valid `interval` values accepted by yfinance `Ticker.history`."""
+    """Valid `interval` values for history lookup."""
 
     m1 = "1m"
     m2 = "2m"
@@ -143,7 +142,7 @@ class IntervalEnum(str, Enum):
 
 
 class MarketEnum(str, Enum):
-    """The 8 Yahoo Finance markets accepted by `yfinance.Market`."""
+    """The 8 supported market identifiers."""
 
     US = "US"
     GB = "GB"
@@ -156,7 +155,7 @@ class MarketEnum(str, Enum):
 
 
 class CalendarEventEnum(str, Enum):
-    """Calendar event types supported by `yfinance.Calendars`."""
+    """Supported calendar event types."""
 
     earnings = "earnings"
     ipo = "ipo"
@@ -165,7 +164,7 @@ class CalendarEventEnum(str, Enum):
 
 
 class SectorEnum(str, Enum):
-    """The 11 sector keys accepted by `yfinance.Sector`."""
+    """The 11 supported sector keys."""
 
     basic_materials = "basic-materials"
     communication_services = "communication-services"
@@ -191,7 +190,7 @@ def _validate_industry_key(value: str) -> str:
     if value not in _VALID_INDUSTRY_KEYS:
         raise ValueError(
             f"Unknown industry key '{value}'. "
-            "See yfinance.const.SECTOR_INDUSTY_MAPPING_LC for accepted values."
+            "See documentation for accepted values."
         )
     return value
 
@@ -282,7 +281,7 @@ def health() -> HealthResponse:
 def get_ticker(
     symbol: Annotated[
         str,
-        Path(min_length=1, max_length=20, description="Yahoo Finance symbol, e.g. AAPL."),
+        Path(min_length=1, max_length=20, description="Market symbol, e.g. AAPL."),
     ],
     period: Annotated[
         PeriodEnum, Query(description="History range, e.g. 1mo, 1y, ytd, max.")
@@ -291,10 +290,10 @@ def get_ticker(
         IntervalEnum, Query(description="Candle interval, e.g. 1d, 1h, 5m.")
     ] = IntervalEnum.d1,
 ) -> TickerResponse:
-    """Look up a single Yahoo Finance ticker.
+    """Look up a single ticker.
 
     Returns the ticker's static `info` payload alongside an OHLC history series
-    bounded by `period` / `interval`. Symbols are passed through to yfinance
+    bounded by `period` / `interval`. Symbols are passed through to the provider
     verbatim, supporting suffixes like `AAPL`, `BRK-B`, or `RDSA.AS`.
     """
     try:
@@ -302,7 +301,7 @@ def get_ticker(
         info = dict(t.info or {})
         hist = t.history(period=period.value, interval=interval.value)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"yfinance error: {e}") from e
+        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
     if hist is None or hist.empty:
         raise HTTPException(
@@ -337,9 +336,9 @@ def get_ticker(
     operation_id="get_market",
 )
 def get_market(market: MarketEnum) -> MarketResponse:
-    """Get a Yahoo Finance market's status and summary.
+    """Get a market's status and summary.
 
-    `market` must be one of the eight identifiers yfinance recognises
+    `market` must be one of the eight supported identifiers
     (US, GB, ASIA, EUROPE, RATES, COMMODITIES, CURRENCIES, CRYPTOCURRENCIES).
     """
     try:
@@ -347,7 +346,7 @@ def get_market(market: MarketEnum) -> MarketResponse:
         summary = m.summary
         status = m.status
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"yfinance error: {e}") from e
+        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
     return MarketResponse(market=market, status=status, summary=summary)
 
 
@@ -366,15 +365,14 @@ def get_calendar(
         date | None, Query(description="End date YYYY-MM-DD (defaults to start + 7 days).")
     ] = None,
     limit: Annotated[
-        int, Query(ge=1, le=100, description="Result count (yfinance caps at 100).")
+        int, Query(ge=1, le=100, description="Result count (capped at 100).")
     ] = 25,
     offset: Annotated[int, Query(ge=0, description="Pagination offset.")] = 0,
 ) -> CalendarResponse:
-    """Fetch an event calendar from Yahoo Finance.
+    """Fetch an event calendar.
 
-    Supported `event` values map to `yfinance.Calendars` methods:
-    `earnings` -> `get_earnings_calendar`, `ipo` -> `get_ipo_info_calendar`,
-    `economic` -> `get_economic_events_calendar`, `splits` -> `get_splits_calendar`.
+    Supported event values include:
+    `earnings`, `ipo`, `economic`, `splits`.
     """
     try:
         cal = yf.Calendars(
@@ -390,7 +388,7 @@ def get_calendar(
         else:
             df = cal.get_splits_calendar(limit=limit, offset=offset)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"yfinance error: {e}") from e
+        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
     return CalendarResponse(
         event=event,
@@ -409,9 +407,9 @@ def get_calendar(
     operation_id="get_sector",
 )
 def get_sector(key: SectorEnum) -> SectorResponse:
-    """Get a Yahoo Finance sector's overview, industries and top constituents.
+    """Get a sector's overview, industries and top constituents.
 
-    `key` is restricted to the 11 sector slugs yfinance accepts (see
+    `key` is restricted to the 11 supported sector slugs (see
     `SectorEnum`). The response bundles the sector overview, member
     industries, top companies, top ETFs and top mutual funds.
     """
@@ -430,7 +428,7 @@ def get_sector(key: SectorEnum) -> SectorResponse:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"yfinance error: {e}") from e
+        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
 
 @api_app.get(
@@ -440,9 +438,9 @@ def get_sector(key: SectorEnum) -> SectorResponse:
     operation_id="get_industry",
 )
 def get_industry(key: IndustryKey) -> IndustryResponse:
-    """Get a Yahoo Finance industry's overview and top constituents.
+    """Get an industry's overview and top constituents.
 
-    `key` is validated against `yfinance.const.SECTOR_INDUSTY_MAPPING_LC`
+    `key` is validated against supported industry mapping
     (e.g. `semiconductors`, `biotechnology`, `reit—industrial`). The response
     includes the parent sector identifiers plus top, top-performing and
     top-growth companies in the industry.
@@ -461,7 +459,7 @@ def get_industry(key: IndustryKey) -> IndustryResponse:
             top_growth_companies=_df_to_records(ind.top_growth_companies),
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"yfinance error: {e}") from e
+        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
 
 mcp = FastMCP.from_fastapi(
@@ -491,7 +489,7 @@ mcp_app = mcp.http_app(path="/mcp", stateless_http=True)
 
 app = FastAPI(
     title="Trade API with MCP",
-    description="A FastAPI service exposing market data via yfinance, with an MCP interface for LLMs.",
+    description="A FastAPI service exposing market data, with an MCP interface for LLMs.",
     version=SERVICE_VERSION_VALUE,
     routes=[*mcp_app.routes, *api_app.routes],
     lifespan=mcp_app.lifespan,
