@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pydantic.alias_generators import to_snake
 
 import json
 from key_value.aio.stores.redis import RedisStore
@@ -217,6 +218,18 @@ def _validate_industry_key(value: str) -> str:
 IndustryKey = Annotated[str, AfterValidator(_validate_industry_key)]
 
 
+class TickerCalendar(BaseModel):
+    dividend_date: date | None = Field(None)
+    ex_dividend_date: date | None = Field(None)
+    earnings_date: list[date] = Field(default_factory=list)
+    earnings_high: float | None = Field(None)
+    earnings_low: float | None = Field(None)
+    earnings_average: float | None = Field(None)
+    revenue_high: float | None = Field(None)
+    revenue_low: float | None = Field(None)
+    revenue_average: float | None = Field(None)
+
+
 class TickerResponse(BaseModel):
     # symbol: str
     # period: str
@@ -225,7 +238,8 @@ class TickerResponse(BaseModel):
     # history: list[HistoryPoint] = Field(default_factory=list)
     actions: list[TickerAction] = Field(default_factory=list)
     analyst_price_targets: AnalystPriceTargets | None = None
-    balance_sheet: list[dict[str, Any]] = Field(default_factory=list)
+    # balance_sheet: list[dict[str, Any]] = Field(default_factory=list)
+    calendar: TickerCalendar | None = None
 
 
 
@@ -319,7 +333,7 @@ def get_ticker(
         t = yf.Ticker(symbol)
         logger.info("check logger", extra={
             # "balance_sheet": t.balance_sheet,
-            "calendar": t.calendar
+            # "calendar": t.calendar
         })
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
@@ -350,7 +364,9 @@ def get_ticker(
         actions=_df_to_records(t.actions),
         analyst_price_targets=AnalystPriceTargets(**t.analyst_price_targets) if t.analyst_price_targets else None,
         # balance_sheet=_df_to_records(t.balance_sheet),
-    )
+        calendar=TickerCalendar(**t.calendar) if t.calendar else None,
+        )
+
 
 
 # @api_app.get(
