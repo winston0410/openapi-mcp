@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from key_value.aio.stores.redis import RedisStore
 from redis.connection import ConnectionPool
 from redis import Redis
@@ -55,6 +56,7 @@ configure_logging(
     environment="local",
     level="INFO"
 )
+logger = logging.getLogger("app")
 
 _otel_resource = Resource.create(
     {SERVICE_NAME: SERVICE_NAME_VALUE, SERVICE_VERSION: SERVICE_VERSION_VALUE}
@@ -224,7 +226,6 @@ class TickerResponse(BaseModel):
 
 
 class MarketResponse(BaseModel):
-    market: MarketEnum
     status: dict[str, Any] | None = None
     summary: dict[str, Any] | None = None
 
@@ -299,6 +300,10 @@ def get_ticker(
     """
     try:
         t = yf.Ticker(symbol)
+        logger.info("check logger", extra={
+            "actions": t.actions,
+            "analyst_price_targets": t.analyst_price_targets
+        })
         info = dict(t.info or {})
         hist = t.history(period=period.value, interval=interval.value)
     except Exception as e:
@@ -330,137 +335,138 @@ def get_ticker(
     )
 
 
-@api_app.get(
-    "/market/{market}",
-    response_model=MarketResponse,
-    tags=["market"],
-    operation_id="get_market",
-)
-def get_market(market: MarketEnum) -> MarketResponse:
-    """Get a market's status and summary.
-
-    `market` must be one of the eight supported identifiers
-    (US, GB, ASIA, EUROPE, RATES, COMMODITIES, CURRENCIES, CRYPTOCURRENCIES).
-    """
-    try:
-        m = yf.Market(market.value)
-        summary = m.summary
-        status = m.status
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
-    return MarketResponse(market=market, status=status, summary=summary)
-
-
-@api_app.get(
-    "/calendars/{event}",
-    response_model=CalendarResponse,
-    tags=["market"],
-    operation_id="get_calendar",
-)
-def get_calendar(
-    event: CalendarEventEnum,
-    start: Annotated[
-        date | None, Query(description="Start date YYYY-MM-DD (defaults to today).")
-    ] = None,
-    end: Annotated[
-        date | None, Query(description="End date YYYY-MM-DD (defaults to start + 7 days).")
-    ] = None,
-    limit: Annotated[
-        int, Query(ge=1, le=100, description="Result count (capped at 100).")
-    ] = 25,
-    offset: Annotated[int, Query(ge=0, description="Pagination offset.")] = 0,
-) -> CalendarResponse:
-    """Fetch an event calendar.
-
-    Supported event values include:
-    `earnings`, `ipo`, `economic`, `splits`.
-    """
-    try:
-        cal = yf.Calendars(
-            start=start.isoformat() if start else None,
-            end=end.isoformat() if end else None,
-        )
-        if event is CalendarEventEnum.earnings:
-            df = cal.get_earnings_calendar(limit=limit, offset=offset)
-        elif event is CalendarEventEnum.ipo:
-            df = cal.get_ipo_info_calendar(limit=limit, offset=offset)
-        elif event is CalendarEventEnum.economic:
-            df = cal.get_economic_events_calendar(limit=limit, offset=offset)
-        else:
-            df = cal.get_splits_calendar(limit=limit, offset=offset)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
-
-    return CalendarResponse(
-        event=event,
-        start=cal._start,
-        end=cal._end,
-        limit=limit,
-        offset=offset,
-        rows=_df_to_records(df),
-    )
+# @api_app.get(
+#     "/market/{market}",
+#     # response_model=MarketResponse,
+#     tags=["market"],
+#     operation_id="get_market",
+# )
+# def get_market(market: MarketEnum) -> MarketResponse:
+#     """Get a market's status and summary.
+#
+#     `market` must be one of the eight supported identifiers
+#     (US, GB, ASIA, EUROPE, RATES, COMMODITIES, CURRENCIES, CRYPTOCURRENCIES).
+#     """
+#     try:
+#         m = yf.Market(market.value)
+#         print(json.dumps(m.status, default=str))
+#         print(json.dumps(m.summary, default=str))
+#         raise HTTPException(status_code=502, detail=f"provider error")
+#         # return MarketResponse(status=m.status, summary=m.summary)
+#     except Exception as e:
+#         raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
 
-@api_app.get(
-    "/sector/{key}",
-    response_model=SectorResponse,
-    tags=["market"],
-    operation_id="get_sector",
-)
-def get_sector(key: SectorEnum) -> SectorResponse:
-    """Get a sector's overview, industries and top constituents.
-
-    `key` is restricted to the 11 supported sector slugs (see
-    `SectorEnum`). The response bundles the sector overview, member
-    industries, top companies, top ETFs and top mutual funds.
-    """
-    try:
-        s = yf.Sector(key.value)
-        return SectorResponse(
-            key=s.key,
-            name=s.name,
-            symbol=s.symbol,
-            overview=dict(s.overview or {}),
-            industries=_df_to_records(s.industries),
-            top_companies=_df_to_records(s.top_companies),
-            top_etfs=dict(s.top_etfs or {}),
-            top_mutual_funds=dict(s.top_mutual_funds or {}),
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
-
-
-@api_app.get(
-    "/industry/{key}",
-    response_model=IndustryResponse,
-    tags=["market"],
-    operation_id="get_industry",
-)
-def get_industry(key: IndustryKey) -> IndustryResponse:
-    """Get an industry's overview and top constituents.
-
-    `key` is validated against supported industry mapping
-    (e.g. `semiconductors`, `biotechnology`, `reit—industrial`). The response
-    includes the parent sector identifiers plus top, top-performing and
-    top-growth companies in the industry.
-    """
-    try:
-        ind = yf.Industry(key)
-        return IndustryResponse(
-            key=ind.key,
-            name=ind.name,
-            symbol=ind.symbol,
-            sector_key=ind.sector_key,
-            sector_name=ind.sector_name,
-            overview=dict(ind.overview or {}),
-            top_companies=_df_to_records(ind.top_companies),
-            top_performing_companies=_df_to_records(ind.top_performing_companies),
-            top_growth_companies=_df_to_records(ind.top_growth_companies),
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+# @api_app.get(
+#     "/calendars/{event}",
+#     response_model=CalendarResponse,
+#     tags=["market"],
+#     operation_id="get_calendar",
+# )
+# def get_calendar(
+#     event: CalendarEventEnum,
+#     start: Annotated[
+#         date | None, Query(description="Start date YYYY-MM-DD (defaults to today).")
+#     ] = None,
+#     end: Annotated[
+#         date | None, Query(description="End date YYYY-MM-DD (defaults to start + 7 days).")
+#     ] = None,
+#     limit: Annotated[
+#         int, Query(ge=1, le=100, description="Result count (capped at 100).")
+#     ] = 25,
+#     offset: Annotated[int, Query(ge=0, description="Pagination offset.")] = 0,
+# ) -> CalendarResponse:
+#     """Fetch an event calendar.
+#
+#     Supported event values include:
+#     `earnings`, `ipo`, `economic`, `splits`.
+#     """
+#     try:
+#         cal = yf.Calendars(
+#             start=start.isoformat() if start else None,
+#             end=end.isoformat() if end else None,
+#         )
+#         if event is CalendarEventEnum.earnings:
+#             df = cal.get_earnings_calendar(limit=limit, offset=offset)
+#         elif event is CalendarEventEnum.ipo:
+#             df = cal.get_ipo_info_calendar(limit=limit, offset=offset)
+#         elif event is CalendarEventEnum.economic:
+#             df = cal.get_economic_events_calendar(limit=limit, offset=offset)
+#         else:
+#             df = cal.get_splits_calendar(limit=limit, offset=offset)
+#     except Exception as e:
+#         raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+#
+#     return CalendarResponse(
+#         event=event,
+#         start=cal._start,
+#         end=cal._end,
+#         limit=limit,
+#         offset=offset,
+#         rows=_df_to_records(df),
+#     )
+#
+#
+# @api_app.get(
+#     "/sector/{key}",
+#     response_model=SectorResponse,
+#     tags=["market"],
+#     operation_id="get_sector",
+# )
+# def get_sector(key: SectorEnum) -> SectorResponse:
+#     """Get a sector's overview, industries and top constituents.
+#
+#     `key` is restricted to the 11 supported sector slugs (see
+#     `SectorEnum`). The response bundles the sector overview, member
+#     industries, top companies, top ETFs and top mutual funds.
+#     """
+#     try:
+#         s = yf.Sector(key.value)
+#         return SectorResponse(
+#             key=s.key,
+#             name=s.name,
+#             symbol=s.symbol,
+#             overview=dict(s.overview or {}),
+#             industries=_df_to_records(s.industries),
+#             top_companies=_df_to_records(s.top_companies),
+#             top_etfs=dict(s.top_etfs or {}),
+#             top_mutual_funds=dict(s.top_mutual_funds or {}),
+#         )
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+#
+#
+# @api_app.get(
+#     "/industry/{key}",
+#     response_model=IndustryResponse,
+#     tags=["market"],
+#     operation_id="get_industry",
+# )
+# def get_industry(key: IndustryKey) -> IndustryResponse:
+#     """Get an industry's overview and top constituents.
+#
+#     `key` is validated against supported industry mapping
+#     (e.g. `semiconductors`, `biotechnology`, `reit—industrial`). The response
+#     includes the parent sector identifiers plus top, top-performing and
+#     top-growth companies in the industry.
+#     """
+#     try:
+#         ind = yf.Industry(key)
+#         return IndustryResponse(
+#             key=ind.key,
+#             name=ind.name,
+#             symbol=ind.symbol,
+#             sector_key=ind.sector_key,
+#             sector_name=ind.sector_name,
+#             overview=dict(ind.overview or {}),
+#             top_companies=_df_to_records(ind.top_companies),
+#             top_performing_companies=_df_to_records(ind.top_performing_companies),
+#             top_growth_companies=_df_to_records(ind.top_growth_companies),
+#         )
+#     except Exception as e:
+#         raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
 
 mcp = FastMCP.from_fastapi(
