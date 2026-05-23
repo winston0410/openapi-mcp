@@ -1,5 +1,5 @@
 bind = ["0.0.0.0:8000"]
-include_server_header = false
+
 accesslog = false
 errorlog = false
-loglevel = "CRITICAL"
+include_server_header = false
