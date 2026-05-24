@@ -223,23 +223,23 @@ IndustryKey = Annotated[str, AfterValidator(_validate_industry_key)]
 class TickerValuationSnapshot(BaseModel):
     as_of: datetime
 
-    market_cap: str | None= Field(None, alias="Market Cap")
-    enterprise_value: str | None = Field(None, alias="Enterprise Value")
-    trailing_pe: float | None = Field(None, alias="Trailing P/E")
-    forward_pe: float | None = Field(None, alias="Forward P/E")
+    market_cap: str | None= Field(None, validation_alias="Market Cap")
+    enterprise_value: str | None = Field(None, validation_alias="Enterprise Value")
+    trailing_pe: float | None = Field(None, validation_alias="Trailing P/E")
+    forward_pe: float | None = Field(None, validation_alias="Forward P/E")
     peg_ratio_5yr_expected: float | None = Field(
         None,
-        alias="PEG Ratio (5yr expected)",
+        validation_alias="PEG Ratio (5yr expected)",
     )
-    price_sales: float | None = Field(None, alias="Price/Sales")
-    price_book: float | None = Field(None, alias="Price/Book")
+    price_sales: float | None = Field(None, validation_alias="Price/Sales")
+    price_book: float | None = Field(None, validation_alias="Price/Book")
     enterprise_value_revenue: float | None = Field(
         None,
-        alias="Enterprise Value/Revenue",
+        validation_alias="Enterprise Value/Revenue",
     )
     enterprise_value_ebitda: float | None = Field(
         None,
-        alias="Enterprise Value/EBITDA",
+        validation_alias="Enterprise Value/EBITDA",
     )
 
 class TickerValuationHistory(BaseModel):
@@ -309,9 +309,9 @@ class IndustryResponse(BaseModel):
 
 
 class TickerAction(BaseModel):
-    date: datetime = Field(..., alias="Date")
-    dividends: float = Field(..., alias="Dividends")
-    stock_splits: float = Field(..., alias="Stock Splits")
+    date: datetime = Field(..., validation_alias="Date")
+    dividends: float = Field(..., validation_alias="Dividends")
+    stock_splits: float = Field(..., validation_alias="Stock Splits")
 
 
 class AnalystPriceTargets(BaseModel):
