@@ -322,7 +322,7 @@ class AnalystPriceTargets(BaseModel):
     median: float | None = None
 
 
-def _df_to_records(df: Any) -> list[dict[str, Any]]:
+def _df_to_records(df: Any, tz: tzinfo | None = None) -> list[dict[str, Any]]:
     if df is None or getattr(df, "empty", True):
         return []
     out = df.reset_index().to_dict(orient="records")
@@ -331,6 +331,14 @@ def _df_to_records(df: Any) -> list[dict[str, Any]]:
             if isinstance(v, float) and math.isnan(v):
                 row[k] = None
             elif hasattr(v, "isoformat"):
+                if tz is not None and hasattr(v, "astimezone"):
+                    try:
+                        if getattr(v, "tzinfo", None) is None:
+                            v = v.replace(tzinfo=UTC).astimezone(tz)
+                        else:
+                            v = v.astimezone(tz)
+                    except Exception:
+                        pass
                 row[k] = v.isoformat()
     return out
 
@@ -407,7 +415,7 @@ def get_ticker(
         # period=period.value,
         # interval=interval.value,
         # info=info,
-        actions=_df_to_records(t.actions),
+        actions=_df_to_records(t.actions, tz=tz),
         analyst_price_targets=AnalystPriceTargets(**t.analyst_price_targets) if t.analyst_price_targets else None,
         # balance_sheet=_df_to_records(t.balance_sheet),
         calendar=TickerCalendar(**t.calendar) if t.calendar else None,
