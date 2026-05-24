@@ -217,6 +217,31 @@ def _validate_industry_key(value: str) -> str:
 
 IndustryKey = Annotated[str, AfterValidator(_validate_industry_key)]
 
+class TickerValuationSnapshot(BaseModel):
+    as_of: str
+
+    market_cap: str | None= Field(None, alias="Market Cap")
+    enterprise_value: str | None = Field(None, alias="Enterprise Value")
+    trailing_pe: float | None = Field(None, alias="Trailing P/E")
+    forward_pe: float | None = Field(None, alias="Forward P/E")
+    peg_ratio_5yr_expected: float | None = Field(
+        None,
+        alias="PEG Ratio (5yr expected)",
+    )
+    price_sales: float | None = Field(None, alias="Price/Sales")
+    price_book: float | None = Field(None, alias="Price/Book")
+    enterprise_value_revenue: float | None = Field(
+        None,
+        alias="Enterprise Value/Revenue",
+    )
+    enterprise_value_ebitda: float | None = Field(
+        None,
+        alias="Enterprise Value/EBITDA",
+    )
+
+
+class TickerValuationHistory(BaseModel):
+    snapshots: list[TickerValuationSnapshot]
 
 class TickerCalendar(BaseModel):
     dividend_date: date | None = Field(None, validation_alias="Dividend Date")
@@ -242,7 +267,7 @@ class TickerResponse(BaseModel):
     analyst_price_targets: AnalystPriceTargets | None = None
     # balance_sheet: list[dict[str, Any]] = Field(default_factory=list)
     calendar: TickerCalendar | None = None
-
+    valuation: list[TickerValuationSnapshot] = Field(default_factory=list)
 
 
 class MarketResponse(BaseModel):
@@ -335,9 +360,16 @@ def get_ticker(
         t = yf.Ticker(symbol)
         logger.info("check logger", extra={
             # "balance_sheet": t.balance_sheet,
-            "calendar": t.calendar
-            # "cash_flow": t.cash_flow.info()
+            # "cash_flow": t.cash_flow.head()
         })
+        valuation = []
+        for column in t.valuation.columns:
+            values = t.valuation[column].to_dict()
+            snapshot = TickerValuationSnapshot(
+                as_of=column,
+                **values,
+            )
+            valuation.append(snapshot)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
@@ -363,12 +395,12 @@ def get_ticker(
         # period=period.value,
         # interval=interval.value,
         # info=info,
-        # history=points,
         actions=_df_to_records(t.actions),
         analyst_price_targets=AnalystPriceTargets(**t.analyst_price_targets) if t.analyst_price_targets else None,
         # balance_sheet=_df_to_records(t.balance_sheet),
         calendar=TickerCalendar(**t.calendar) if t.calendar else None,
-        )
+        valuation=valuation
+    )
 
 
 

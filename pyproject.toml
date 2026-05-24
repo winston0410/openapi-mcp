@@ -18,3 +18,8 @@ dependencies = [
     "redis>=7.4.0",
     "yfinance>=1.3.0",
 ]
+
+[dependency-groups]
+dev = [
+    "tabulate>=0.10.0",
+]
