@@ -1,4 +1,6 @@
 from __future__ import annotations
+from typing import Any, List, Optional
+from pydantic import BaseModel, HttpUrl
 from zoneinfo import ZoneInfo
 from datetime import datetime, timezone, tzinfo
 from pydantic import BaseModel, Field, field_validator
@@ -258,9 +260,292 @@ class TickerCalendar(BaseModel):
     revenue_low: float | None = Field(None, validation_alias="Revenue Low")
     revenue_average: float | None = Field(None, validation_alias="Revenue Average")
 
+class CompanyOfficer(BaseModel):
+    maxAge: int
+    name: str
+    age: Optional[int] = None
+    title: str
+    yearBorn: Optional[int] = None
+    fiscalYear: int
+    totalPay: Optional[int] = None
+    exercisedValue: int
+    unexercisedValue: int
+
+
+class TickerSummary(BaseModel):
+    address1: str
+    city: str
+    state: str
+    zip: str
+    country: str
+    phone: str
+    website: HttpUrl
+
+    industry: str
+    industryKey: str
+    industryDisp: str
+    sector: str
+    sectorKey: str
+    sectorDisp: str
+
+    longBusinessSummary: str
+    fullTimeEmployees: int
+
+    companyOfficers: List[CompanyOfficer]
+
+    auditRisk: int
+    boardRisk: int
+    compensationRisk: int
+    shareHolderRightsRisk: int
+    overallRisk: int
+
+    governanceEpochDate: int
+    compensationAsOfEpochDate: int
+
+    irWebsite: HttpUrl
+
+    executiveTeam: List[Any]
+
+    maxAge: int
+    priceHint: int
+
+    previousClose: float
+    open: float
+    dayLow: float
+    dayHigh: float
+
+    regularMarketPreviousClose: float
+    regularMarketOpen: float
+    regularMarketDayLow: float
+    regularMarketDayHigh: float
+
+    dividendRate: float
+    dividendYield: float
+    exDividendDate: int
+    payoutRatio: float
+    fiveYearAvgDividendYield: float
+
+    beta: float
+    trailingPE: float
+    forwardPE: float
+
+    volume: int
+    regularMarketVolume: int
+    averageVolume: int
+    averageVolume10days: int
+    averageDailyVolume10Day: int
+
+    bid: float
+    ask: float
+    bidSize: int
+    askSize: int
+
+    marketCap: int
+    nonDilutedMarketCap: int
+
+    fiftyTwoWeekLow: float
+    fiftyTwoWeekHigh: float
+    allTimeHigh: float
+    allTimeLow: float
+
+    priceToSalesTrailing12Months: float
+
+    fiftyDayAverage: float
+    twoHundredDayAverage: float
+
+    trailingAnnualDividendRate: float
+    trailingAnnualDividendYield: float
+
+    currency: str
+    tradeable: bool
+
+    enterpriseValue: int
+    profitMargins: float
+
+    floatShares: int
+    sharesOutstanding: int
+    sharesShort: int
+    sharesShortPriorMonth: int
+    sharesShortPreviousMonthDate: int
+    dateShortInterest: int
+
+    sharesPercentSharesOut: float
+    heldPercentInsiders: float
+    heldPercentInstitutions: float
+
+    shortRatio: float
+    shortPercentOfFloat: float
+
+    impliedSharesOutstanding: int
+
+    bookValue: float
+    priceToBook: float
+
+    lastFiscalYearEnd: int
+    nextFiscalYearEnd: int
+    mostRecentQuarter: int
+
+    earningsQuarterlyGrowth: float
+
+    netIncomeToCommon: int
+
+    trailingEps: float
+    forwardEps: float
+
+    pegRatio: float
+
+    lastSplitFactor: str
+    lastSplitDate: int
+
+    enterpriseToRevenue: float
+    enterpriseToEbitda: float
+
+    fiftyTwoWeekChange: float = Field(alias="52WeekChange")
+    SandP52WeekChange: float
+
+    lastDividendValue: float
+    lastDividendDate: int
+
+    quoteType: str
+
+    currentPrice: float
+
+    targetHighPrice: float
+    targetLowPrice: float
+    targetMeanPrice: float
+    targetMedianPrice: float
+
+    recommendationMean: float
+    recommendationKey: str
+    numberOfAnalystOpinions: int
+
+    totalCash: int
+    totalCashPerShare: float
+    ebitda: int
+    totalDebt: int
+
+    quickRatio: float
+    currentRatio: float
+
+    totalRevenue: int
+
+    debtToEquity: float
+    revenuePerShare: float
+
+    returnOnAssets: float
+    returnOnEquity: float
+
+    grossProfits: int
+    freeCashflow: int
+    operatingCashflow: int
+
+    earningsGrowth: float
+    revenueGrowth: float
+
+    grossMargins: float
+    ebitdaMargins: float
+    operatingMargins: float
+
+    financialCurrency: str
+
+    symbol: str
+    language: str
+    region: str
+
+    typeDisp: str
+    quoteSourceName: str
+
+    triggerable: bool
+    customPriceAlertConfidence: str
+
+    shortName: str
+    longName: str
+
+    prevName: str
+    nameChangeDate: str
+
+    averageAnalystRating: str
+
+    cryptoTradeable: bool
+    marketState: str
+
+    hasPrePostMarketData: bool
+
+    firstTradeDateMilliseconds: int
+
+    postMarketChangePercent: float
+    postMarketPrice: float
+    postMarketChange: float
+
+    regularMarketChange: float
+    regularMarketDayRange: str
+
+    fullExchangeName: str
+
+    averageDailyVolume3Month: int
+
+    fiftyTwoWeekLowChange: float
+    fiftyTwoWeekLowChangePercent: float
+
+    fiftyTwoWeekRange: str
+
+    fiftyTwoWeekHighChange: float
+    fiftyTwoWeekHighChangePercent: float
+
+    fiftyTwoWeekChangePercent: float
+
+    dividendDate: int
+
+    earningsTimestamp: int
+    earningsTimestampStart: int
+    earningsTimestampEnd: int
+
+    earningsCallTimestampStart: int
+    earningsCallTimestampEnd: int
+
+    isEarningsDateEstimate: bool
+
+    epsTrailingTwelveMonths: float
+    epsForward: float
+    epsCurrentYear: float
+
+    priceEpsCurrentYear: float
+
+    fiftyDayAverageChange: float
+    fiftyDayAverageChangePercent: float
+
+    twoHundredDayAverageChange: float
+    twoHundredDayAverageChangePercent: float
+
+    sourceInterval: int
+    exchangeDataDelayedBy: int
+
+    regularMarketChangePercent: float
+    regularMarketPrice: float
+
+    corporateActions: List[Any]
+
+    postMarketTime: int
+    regularMarketTime: int
+
+    exchange: str
+    messageBoardId: str
+
+    exchangeTimezoneName: str
+    exchangeTimezoneShortName: str
+
+    gmtOffSetMilliseconds: int
+
+    market: str
+
+    esgPopulated: bool
+
+    displayName: str
+
+    trailingPegRatio: float
 
 class TickerResponse(BaseModel):
-    # symbol: str
+    # summary: TickerSummary
     # period: str
     # interval: str
     # info: dict[str, Any] = Field(default_factory=dict)
@@ -411,6 +696,7 @@ def get_ticker(
     #     for idx, row in hist.iterrows()
     # ]
     return TickerResponse(
+        # summary=TickerSummary(**t.info),
         # symbol=symbol.upper(),
         # period=period.value,
         # interval=interval.value,
