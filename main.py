@@ -219,15 +219,17 @@ IndustryKey = Annotated[str, AfterValidator(_validate_industry_key)]
 
 
 class TickerCalendar(BaseModel):
-    dividend_date: date | None = Field(None)
-    ex_dividend_date: date | None = Field(None)
-    earnings_date: list[date] = Field(default_factory=list)
-    earnings_high: float | None = Field(None)
-    earnings_low: float | None = Field(None)
-    earnings_average: float | None = Field(None)
-    revenue_high: float | None = Field(None)
-    revenue_low: float | None = Field(None)
-    revenue_average: float | None = Field(None)
+    dividend_date: date | None = Field(None, validation_alias="Dividend Date")
+    ex_dividend_date: date | None = Field(None, validation_alias="Ex-Dividend Date")
+    earnings_date: list[date] = Field(default_factory=list, validation_alias="Earnings Date")
+
+    earnings_high: float | None = Field(None, validation_alias="Earnings High")
+    earnings_low: float | None = Field(None, validation_alias="Earnings Low")
+    earnings_average: float | None = Field(None, validation_alias="Earnings Average")
+
+    revenue_high: float | None = Field(None, validation_alias="Revenue High")
+    revenue_low: float | None = Field(None, validation_alias="Revenue Low")
+    revenue_average: float | None = Field(None, validation_alias="Revenue Average")
 
 
 class TickerResponse(BaseModel):
@@ -333,7 +335,8 @@ def get_ticker(
         t = yf.Ticker(symbol)
         logger.info("check logger", extra={
             # "balance_sheet": t.balance_sheet,
-            # "calendar": t.calendar
+            "calendar": t.calendar
+            # "cash_flow": t.cash_flow.info()
         })
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
