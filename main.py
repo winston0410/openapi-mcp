@@ -1,5 +1,6 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+from datetime import datetime, timezone, tzinfo
 from pydantic import BaseModel, Field, field_validator
 from pydantic.alias_generators import to_snake
 
@@ -240,15 +241,6 @@ class TickerValuationSnapshot(BaseModel):
         None,
         alias="Enterprise Value/EBITDA",
     )
-    @field_validator("as_of", mode="before")
-    @classmethod
-    def parse_as_of(cls, value):
-        if value == "Current":
-            return datetime.now(timezone.utc)
-
-        dt = datetime.strptime(value, "%m/%d/%Y")
-        return dt.replace(tzinfo=timezone.utc)
-
 
 class TickerValuationHistory(BaseModel):
     snapshots: list[TickerValuationSnapshot]
@@ -359,6 +351,10 @@ def get_ticker(
     interval: Annotated[
         IntervalEnum, Query(description="Candle interval, e.g. 1d, 1h, 5m.")
     ] = IntervalEnum.d1,
+    timezone: Annotated[
+        str,
+        Query(description="Timezone name, e.g. UTC or America/New_York."),
+    ] = "UTC"
 ) -> TickerResponse:
     """Look up a single ticker.
 
@@ -367,16 +363,22 @@ def get_ticker(
     verbatim, supporting suffixes like `AAPL`, `BRK-B`, or `RDSA.AS`.
     """
     try:
+        tz = ZoneInfo(timezone)
         t = yf.Ticker(symbol)
-        logger.info("check logger", extra={
-            # "balance_sheet": t.balance_sheet,
-            # "cash_flow": t.cash_flow.head()
-        })
+        # logger.info("check logger", extra={
+        #     # "balance_sheet": t.balance_sheet,
+        #     # "cash_flow": t.cash_flow.head()
+        # })
         valuation = []
         for column in t.valuation.columns:
             values = t.valuation[column].to_dict()
+            as_of = (
+                datetime.now(tz)
+                if column == "Current"
+                else datetime.strptime(column, "%m/%d/%Y").replace(tzinfo=tz)
+            )
             snapshot = TickerValuationSnapshot(
-                as_of=column,
+                as_of=as_of,
                 **values,
             )
             valuation.append(snapshot)
