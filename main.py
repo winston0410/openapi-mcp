@@ -1,4 +1,6 @@
 from __future__ import annotations
+from datetime import datetime, timezone
+from pydantic import BaseModel, Field, field_validator
 from pydantic.alias_generators import to_snake
 
 import json
@@ -218,7 +220,7 @@ def _validate_industry_key(value: str) -> str:
 IndustryKey = Annotated[str, AfterValidator(_validate_industry_key)]
 
 class TickerValuationSnapshot(BaseModel):
-    as_of: str
+    as_of: datetime
 
     market_cap: str | None= Field(None, alias="Market Cap")
     enterprise_value: str | None = Field(None, alias="Enterprise Value")
@@ -238,6 +240,14 @@ class TickerValuationSnapshot(BaseModel):
         None,
         alias="Enterprise Value/EBITDA",
     )
+    @field_validator("as_of", mode="before")
+    @classmethod
+    def parse_as_of(cls, value):
+        if value == "Current":
+            return datetime.now(timezone.utc)
+
+        dt = datetime.strptime(value, "%m/%d/%Y")
+        return dt.replace(tzinfo=timezone.utc)
 
 
 class TickerValuationHistory(BaseModel):
